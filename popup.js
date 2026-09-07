@@ -126,6 +126,15 @@ function renderReport(errors, addedCount = 0) {
     const typeSummary = Object.entries(grouped)
         .map(([type, items]) => `${items.length} ${reportLabels[type]?.plainName || type}`)
         .join(', ');
+    const guidance = new Map();
+    errors.forEach(error => {
+        const explanation = getErrorExplanation(error);
+        const nextStep = getNextStep(error);
+        const key = `${explanation}|${nextStep}`;
+
+        if (!guidance.has(key)) guidance.set(key, {explanation, nextStep, count: 0});
+        guidance.get(key).count += 1;
+    });
 
     let report = `═══════════════════════════════════════════════════\n`;
     report += `       📋 REPORTE DE ERRORES - CANVAS LMS\n`;
@@ -136,6 +145,13 @@ function renderReport(errors, addedCount = 0) {
     report += `Se detectaron ${errors.length} incidencia(s) única(s) durante la navegación: ${typeSummary}.\n`;
     report += `Esto puede hacer que algún contenido no aparezca, que una acción no termine o que parte de la página funcione de forma incompleta.\n`;
     report += `El detalle técnico se incluye más abajo para que soporte pueda investigarlo.\n\n`;
+    report += `EXPLICACIÓN Y QUÉ HACER\n`;
+    report += `Estas indicaciones aplican a las incidencias indicadas antes de cada bloque de detalle.\n\n`;
+    [...guidance.values()].forEach(({explanation, nextStep, count}, index) => {
+        report += `${index + 1}. Aplica a ${count} incidencia(s)\n`;
+        report += `   Explicación: ${explanation}\n`;
+        report += `   Qué hacer: ${nextStep}\n\n`;
+    });
     if (addedCount > 0) report += `Se agregaron ${addedCount} incidencia(s) nueva(s) de la página actual.\n\n`;
     report += `───────────────────────────────────────────────────\n\n`;
 
@@ -149,9 +165,7 @@ function renderReport(errors, addedCount = 0) {
         report += `   Qué significa: ${label.explanation}\n\n`;
 
         items.forEach((error, index) => {
-            report += `   ${index + 1}. Explicación: ${getErrorExplanation(error)}\n`;
-            report += `      └─ Qué hacer: ${getNextStep(error)}\n`;
-            report += `      └─ Página donde se detectó: ${error.pageUrl || 'URL no disponible'}\n`;
+            report += `   ${index + 1}. Página donde se detectó: ${error.pageUrl || 'URL no disponible'}\n`;
             report += `      └─ Dirección afectada: ${error.url || 'URL no disponible'}\n`;
             if (error.tag) report += `      └─ Elemento: <${error.tag}>\n`;
             if (error.status !== undefined && error.status !== null) report += `      └─ Estado HTTP (dato técnico): ${error.status} ${error.statusText || ''}\n`;
