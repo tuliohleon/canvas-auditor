@@ -1,27 +1,6 @@
-document.getElementById('generateBtn').addEventListener('click', generateReport);
-document.getElementById('clearBtn').addEventListener('click', clearErrors);
+document.getElementById('generateBtn').addEventListener('click', addCurrentPageToReport);
+document.getElementById('clearBtn').addEventListener('click', clearReport);
 document.getElementById('copyBtn').addEventListener('click', copyToClipboard);
-
-function updateCount() {
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-        const tabId = tabs[0]?.id;
-        if (!tabId) return;
-        
-        chrome.storage.local.get({errors: {}}, (data) => {
-            const errors = data.errors[tabId] || [];
-            const el = document.getElementById('count');
-            if (errors.length === 0) {
-                el.textContent = '✅ Sin errores detectados en esta página';
-                el.className = 'count ok';
-            } else {
-                el.textContent = `⚠️ ${errors.length} error(es) detectado(s)`;
-                el.className = 'count error';
-            }
-        });
-    });
-}
-
-updateCount();
 
 const reportLabels = {
     resource: {
@@ -41,6 +20,31 @@ const reportLabels = {
     }
 };
 
+function updateCount() {
+    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        const tabId = tabs[0]?.id;
+        if (!tabId) return;
+
+        chrome.storage.local.get({errors: {}, reportErrors: []}, (data) => {
+            const errors = data.errors[tabId] || [];
+            const count = document.getElementById('count');
+            const generateButton = document.getElementById('generateBtn');
+
+            if (errors.length === 0) {
+                count.textContent = '✅ Sin errores detectados en esta página';
+                count.className = 'count ok';
+            } else {
+                count.textContent = `⚠️ ${errors.length} error(es) detectado(s) en esta página`;
+                count.className = 'count error';
+            }
+
+            generateButton.textContent = data.reportErrors.length > 0
+                ? '➕ Agregar al Reporte'
+                : '📄 Generar Reporte';
+        });
+    });
+}
+
 function getStatusExplanation(status) {
     if (status === 401) return 'Se requiere iniciar sesión o la sesión ya no es válida.';
     if (status === 403) return 'No tienes permiso para acceder a este recurso.';
@@ -54,9 +58,7 @@ function getStatusExplanation(status) {
 function getErrorExplanation(error) {
     const status = Number(error.status);
     if (Number.isFinite(status)) return getStatusExplanation(status);
-    if (error.type === 'resource') {
-        return 'Este elemento no se pudo cargar. Revisa si falta contenido en la página o si el enlace dejó de funcionar.';
-    }
+    if (error.type === 'resource') return 'Este elemento no se pudo cargar. Revisa si falta contenido en la página o si el enlace dejó de funcionar.';
     return 'La página no pudo obtener la información que necesitaba. Puede ser un problema temporal de conexión o del servicio.';
 }
 
@@ -68,98 +70,125 @@ function getNextStep(error) {
     return 'Recarga la página y repite la acción. Si persiste, comparte este reporte con soporte técnico.';
 }
 
-function generateReport() {
+function errorKey(error) {
+    return [error.type, error.pageUrl, error.url, error.tag, error.method, error.status, error.statusText, error.error, error.note]
+        .map(value => value ?? '')
+        .join('|');
+}
+
+function addCurrentPageToReport() {
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         const tab = tabs[0];
-        const tabId = tab.id;
-        
-        chrome.storage.local.get({errors: {}}, (data) => {
-            const errors = data.errors[tabId] || [];
+        if (!tab) return;
+
+        chrome.storage.local.get({errors: {}, reportErrors: []}, (data) => {
+            const pageErrors = data.errors[tab.id] || [];
             const reportDiv = document.getElementById('report');
-            
-            if (errors.length === 0) {
-                reportDiv.innerHTML = '<div class="empty">No hay errores para reportar en esta pestaña.</div>';
+
+            if (pageErrors.length === 0 && data.reportErrors.length === 0) {
+                reportDiv.innerHTML = '<div class="empty">No hay errores para agregar en esta pestaña.</div>';
                 document.getElementById('copyBtn').style.display = 'none';
                 return;
             }
 
-            // Agrupar por tipo
-            const grouped = {};
-            errors.forEach(e => {
-                const t = e.type || 'Desconocido';
-                if (!grouped[t]) grouped[t] = [];
-                grouped[t].push(e);
+            const knownErrors = new Set(data.reportErrors.map(errorKey));
+            const newErrors = pageErrors.filter(error => {
+                const key = errorKey(error);
+                if (knownErrors.has(key)) return false;
+                knownErrors.add(key);
+                return true;
             });
+            const reportErrors = [...data.reportErrors, ...newErrors];
 
-            const typeSummary = Object.entries(grouped)
-                .map(([type, items]) => `${items.length} ${reportLabels[type]?.plainName || type}`)
-                .join(', ');
-
-            let r = `═══════════════════════════════════════════════════\n`;
-            r += `       📋 REPORTE DE ERRORES - CANVAS LMS\n`;
-            r += `═══════════════════════════════════════════════════\n\n`;
-            r += `🌐 Página: ${tab.title}\n`;
-            r += `🔗 URL: ${tab.url}\n`;
-            r += `📅 Fecha: ${new Date().toLocaleString('es-ES')}\n`;
-            r += `⚠️ Total de errores detectados: ${errors.length}\n\n`;
-            r += `RESUMEN EN LENGUAJE CLARO\n`;
-            r += `Se detectaron ${errors.length} incidencia(s) mientras se usaba esta página: ${typeSummary}.\n`;
-            r += `Esto puede hacer que algún contenido no aparezca, que una acción no termine o que parte de la página funcione de forma incompleta.\n`;
-            r += `El detalle técnico se incluye más abajo para que soporte pueda investigarlo.\n\n`;
-            r += `───────────────────────────────────────────────────\n\n`;
-
-            for (const [type, items] of Object.entries(grouped)) {
-                const label = reportLabels[type] || {
-                    title: `❓ ${type.toUpperCase()}`,
-                    explanation: 'Se detectó un problema cuyo tipo no pudo clasificarse.'
-                };
-                r += `${label.title}\n`;
-                r += `   Cantidad: ${items.length}\n\n`;
-                r += `   Qué significa: ${label.explanation}\n\n`;
-                
-                items.forEach((err, i) => {
-                    r += `   ${i + 1}. Explicación: ${getErrorExplanation(err)}\n`;
-                    r += `      └─ Qué hacer: ${getNextStep(err)}\n`;
-                    r += `      └─ Dirección afectada: ${err.url || 'URL no disponible'}\n`;
-                    if (err.tag) r += `      └─ Elemento: <${err.tag}>\n`;
-                    if (err.status !== undefined && err.status !== null) r += `      └─ Estado HTTP (dato técnico): ${err.status} ${err.statusText || ''}\n`;
-                    if (err.method) r += `      └─ Método: ${err.method}\n`;
-                    if (err.error) r += `      └─ Error: ${err.error}\n`;
-                    if (err.note) r += `      └─ Nota: ${err.note}\n`;
-                    r += `      └─ Hora: ${new Date(err.timestamp).toLocaleTimeString('es-ES')}\n\n`;
-                });
-            }
-
-            r += `───────────────────────────────────────────────────\n`;
-            r += `Reporte generado por Canvas Resource Auditor\n`;
-            r += `═══════════════════════════════════════════════════`;
-
-            reportDiv.textContent = r;
-            document.getElementById('copyBtn').style.display = 'inline-block';
+            chrome.storage.local.set({reportErrors}, () => {
+                renderReport(reportErrors, newErrors.length);
+                updateCount();
+            });
         });
     });
 }
 
-function clearErrors() {
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-        const tabId = tabs[0].id;
-        chrome.storage.local.get({errors: {}}, (data) => {
-            delete data.errors[tabId];
-            chrome.storage.local.set({errors: data.errors}, () => {
-                updateCount();
-                document.getElementById('report').innerHTML = '<div class="empty">Errores limpiados.</div>';
-                document.getElementById('copyBtn').style.display = 'none';
-            });
+function renderReport(errors, addedCount = 0) {
+    const reportDiv = document.getElementById('report');
+    if (errors.length === 0) {
+        reportDiv.innerHTML = '<div class="empty">Aún no hay errores en el reporte.</div>';
+        document.getElementById('copyBtn').style.display = 'none';
+        return;
+    }
+
+    const grouped = {};
+    errors.forEach(error => {
+        const type = error.type || 'Desconocido';
+        if (!grouped[type]) grouped[type] = [];
+        grouped[type].push(error);
+    });
+
+    const typeSummary = Object.entries(grouped)
+        .map(([type, items]) => `${items.length} ${reportLabels[type]?.plainName || type}`)
+        .join(', ');
+
+    let report = `═══════════════════════════════════════════════════\n`;
+    report += `       📋 REPORTE DE ERRORES - CANVAS LMS\n`;
+    report += `═══════════════════════════════════════════════════\n\n`;
+    report += `📅 Última actualización: ${new Date().toLocaleString('es-ES')}\n`;
+    report += `⚠️ Total de errores únicos: ${errors.length}\n\n`;
+    report += `RESUMEN\n`;
+    report += `Se detectaron ${errors.length} incidencia(s) única(s) durante la navegación: ${typeSummary}.\n`;
+    report += `Esto puede hacer que algún contenido no aparezca, que una acción no termine o que parte de la página funcione de forma incompleta.\n`;
+    report += `El detalle técnico se incluye más abajo para que soporte pueda investigarlo.\n\n`;
+    if (addedCount > 0) report += `Se agregaron ${addedCount} incidencia(s) nueva(s) de la página actual.\n\n`;
+    report += `───────────────────────────────────────────────────\n\n`;
+
+    for (const [type, items] of Object.entries(grouped)) {
+        const label = reportLabels[type] || {
+            title: `❓ ${type.toUpperCase()}`,
+            explanation: 'Se detectó un problema cuyo tipo no pudo clasificarse.'
+        };
+        report += `${label.title}\n`;
+        report += `   Cantidad: ${items.length}\n\n`;
+        report += `   Qué significa: ${label.explanation}\n\n`;
+
+        items.forEach((error, index) => {
+            report += `   ${index + 1}. Explicación: ${getErrorExplanation(error)}\n`;
+            report += `      └─ Qué hacer: ${getNextStep(error)}\n`;
+            report += `      └─ Página donde se detectó: ${error.pageUrl || 'URL no disponible'}\n`;
+            report += `      └─ Dirección afectada: ${error.url || 'URL no disponible'}\n`;
+            if (error.tag) report += `      └─ Elemento: <${error.tag}>\n`;
+            if (error.status !== undefined && error.status !== null) report += `      └─ Estado HTTP (dato técnico): ${error.status} ${error.statusText || ''}\n`;
+            if (error.method) report += `      └─ Método: ${error.method}\n`;
+            if (error.error) report += `      └─ Error: ${error.error}\n`;
+            if (error.note) report += `      └─ Nota: ${error.note}\n`;
+            report += `      └─ Hora: ${new Date(error.timestamp).toLocaleTimeString('es-ES')}\n\n`;
         });
+    }
+
+    report += `───────────────────────────────────────────────────\n`;
+    report += `Reporte generado por Canvas Resource Auditor\n`;
+    report += `═══════════════════════════════════════════════════`;
+
+    reportDiv.textContent = report;
+    document.getElementById('copyBtn').style.display = 'inline-block';
+}
+
+function clearReport() {
+    chrome.storage.local.set({reportErrors: []}, () => {
+        document.getElementById('report').innerHTML = '<div class="empty">Reporte limpiado. Puedes iniciar una recopilación nueva.</div>';
+        document.getElementById('copyBtn').style.display = 'none';
+        updateCount();
     });
 }
 
 function copyToClipboard() {
     const text = document.getElementById('report').textContent;
     navigator.clipboard.writeText(text).then(() => {
-        const btn = document.getElementById('copyBtn');
-        const original = btn.textContent;
-        btn.textContent = '✅ ¡Copiado!';
-        setTimeout(() => btn.textContent = original, 2000);
+        const button = document.getElementById('copyBtn');
+        const original = button.textContent;
+        button.textContent = '✅ ¡Copiado!';
+        setTimeout(() => button.textContent = original, 2000);
     });
 }
+
+chrome.storage.local.get({reportErrors: []}, (data) => {
+    updateCount();
+    if (data.reportErrors.length > 0) renderReport(data.reportErrors);
+});

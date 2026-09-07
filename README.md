@@ -2,7 +2,7 @@
 
 Extensión de Chrome para detectar recursos y solicitudes fallidas mientras navegas por un curso en Canvas LMS. Reúne los hallazgos por pestaña y genera un reporte listo para copiar y enviar al equipo responsable.
 
-> La extensión no modifica el contenido de Canvas ni envía información a servidores externos: los errores se guardan localmente en el navegador y se eliminan al recargar, navegar o cerrar la pestaña.
+> La extensión no modifica el contenido de Canvas ni envía información a servidores externos: los datos se guardan localmente en el navegador. El reporte acumulado se conserva hasta que selecciones **Limpiar Reporte**.
 
 ## Qué detecta
 
@@ -31,11 +31,12 @@ Cuando cambies el código, vuelve a `chrome://extensions` y usa el botón de rec
 
 1. Abre un curso o una página de Canvas y navega normalmente; la auditoría comienza automáticamente.
 2. Haz clic en el icono de la extensión para ver el número de incidencias de la pestaña actual.
-3. Selecciona **Generar Reporte** para agrupar los errores detectados.
-4. Usa **Copiar al Portapapeles** para pegar el reporte en un correo, ticket o mensaje.
-5. Selecciona **Limpiar** para descartar los hallazgos de esa pestaña sin recargarla.
+3. Selecciona **Generar Reporte** para iniciar una recopilación con los errores de la página actual.
+4. En las demás páginas, selecciona **Agregar al Reporte** para incorporar las incidencias nuevas al mismo reporte. La extensión omite duplicados.
+5. Usa **Copiar al Portapapeles** para pegar el reporte en un correo, ticket o mensaje.
+6. Selecciona **Limpiar Reporte** para terminar la recopilación, borrar el reporte acumulado y volver a iniciar una nueva.
 
-Los datos están aislados por pestaña. Se borran automáticamente cuando la página comienza a cargarse de nuevo, al navegar a otra URL o al cerrar la pestaña.
+Los errores detectados en la página actual están aislados por pestaña y se borran automáticamente al recargar, navegar o cerrar la pestaña. El reporte acumulado permanece disponible entre páginas hasta que lo limpies.
 
 ## Alcance y limitaciones
 
