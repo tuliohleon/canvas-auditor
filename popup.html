@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { 
+            width: 420px; 
+            padding: 16px; 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            margin: 0;
+        }
+        h2 { 
+            margin: 0 0 12px 0; 
+            font-size: 16px; 
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        .status { 
+            font-size: 13px; 
+            color: #555; 
+            margin-bottom: 12px; 
+            line-height: 1.4;
+        }
+        .count { 
+            font-weight: bold; 
+            margin-bottom: 12px; 
+            font-size: 14px;
+        }
+        .count.error { color: #e74c3c; }
+        .count.ok { color: #27ae60; }
+        button { 
+            border: none; 
+            padding: 10px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 13px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.85; }
+        #generateBtn { background: #2980b9; color: white; }
+        #copyBtn { background: #27ae60; color: white; display: none; margin-left: 8px; }
+        #clearBtn { background: #95a5a6; color: white; margin-left: 8px; }
+        #report { 
+            margin-top: 14px; 
+            max-height: 320px; 
+            overflow-y: auto;
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            border-radius: 6px;
+            padding: 12px; 
+            font-size: 12px; 
+            white-space: pre-wrap; 
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            line-height: 1.5;
+            color: #2c3e50;
+        }
+        .empty { color: #7f8c8d; font-style: italic; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <h2>🔍 Auditor de Canvas LMS</h2>
+    <div class="status">
+        Navega normalmente por Canvas. La extensión detecta automáticamente imágenes rotas, videos caídos, errores 403/404 y APIs fallidas.
+    </div>
+    <div class="count" id="count">Cargando...</div>
+    
+    <button id="generateBtn">📄 Generar Reporte</button>
+    <button id="copyBtn">📋 Copiar al Portapapeles</button>
+    <button id="clearBtn">🗑️ Limpiar</button>
+    
+    <div id="report"></div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
